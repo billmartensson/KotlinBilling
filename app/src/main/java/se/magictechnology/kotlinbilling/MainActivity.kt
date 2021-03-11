@@ -18,10 +18,11 @@ class MainActivity : AppCompatActivity(), PurchasesUpdatedListener {
         setContentView(R.layout.activity_main)
 
         billingClient = BillingClient.newBuilder(this).setListener(this).enablePendingPurchases().build()
+
         billingClient!!.startConnection(object : BillingClientStateListener {
             override fun onBillingSetupFinished(billingResult: BillingResult) {
                 if (billingResult.responseCode ==  BillingClient.BillingResponseCode.OK) {
-
+                    checkHistory()
                 }
             }
             override fun onBillingServiceDisconnected() {
@@ -36,8 +37,6 @@ class MainActivity : AppCompatActivity(), PurchasesUpdatedListener {
 
         findViewById<Button>(R.id.buyBtn).setOnClickListener {
             var buyProduct = skudetails!![0]
-
-            //buyProduct = skudetails!!.filter { it.sku == "premium" }.first()
 
             val billingFlowParams = BillingFlowParams.newBuilder().setSkuDetails(buyProduct).build()
 
@@ -55,10 +54,13 @@ class MainActivity : AppCompatActivity(), PurchasesUpdatedListener {
             return
         }
         val skuList = ArrayList<String>()
-        skuList.add("android.test.purchased")
+        skuList.add("fancycredit")
+
+        Log.i("DEBUGBILLING", "GET PRODUCTS")
 
         val params = SkuDetailsParams.newBuilder()
         params.setSkusList(skuList).setType(BillingClient.SkuType.INAPP)
+
         billingClient!!.querySkuDetailsAsync(params.build()) { responseCode, skuDetailsList ->
             if (responseCode.responseCode == BillingClient.BillingResponseCode.OK) {
 
@@ -79,6 +81,7 @@ class MainActivity : AppCompatActivity(), PurchasesUpdatedListener {
 
             } else {
                 // TODO: Error no response
+                Log.i("DEBUGBILLING", "ERROR PRODUCTS ")
             }
         }
     }
@@ -87,26 +90,59 @@ class MainActivity : AppCompatActivity(), PurchasesUpdatedListener {
         Log.i("DEBUGBILLING", "onPurchasesUpdated")
 
         p0?.let {
+            if(it.responseCode == BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED)
+            {
+                Log.i("DEBUGBILLING", "ÄGER REDAN")
+            }
             if(it.responseCode == BillingClient.BillingResponseCode.OK)
             {
                 p1?.let {  plist ->
                     plist.firstOrNull()?.let {  thepurchase ->
-                        if (!thepurchase.isAcknowledged) {
-                            val acknowledgePurchaseParams = AcknowledgePurchaseParams.newBuilder()
-                                    .setPurchaseToken(thepurchase.purchaseToken)
 
-                            if(billingClient != null)
-                            {
-                                billingClient!!.acknowledgePurchase(acknowledgePurchaseParams.build()) {
+                        var buyOnce = false
+
+                        if(buyOnce)
+                        {
+                            // KÖP EN GÅNG
+                            if (!thepurchase.isAcknowledged) {
+                                val acknowledgePurchaseParams = AcknowledgePurchaseParams.newBuilder()
+                                        .setPurchaseToken(thepurchase.purchaseToken)
+
+                                if(billingClient != null)
+                                {
+                                    billingClient!!.acknowledgePurchase(acknowledgePurchaseParams.build()) {
+                                        Log.i("DEBUGBILLING", "OK BUY")
+
+
+                                        if(billingClient != null)
+                                        {
+                                            billingClient!!.endConnection()
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // KÖP FLERA GÅNGER
+                            val consumeParams =
+                                    ConsumeParams.newBuilder()
+                                            .setPurchaseToken(thepurchase.purchaseToken)
+                                            .build()
+
+                            billingClient!!.consumeAsync(consumeParams, { billingResult, outToken ->
+                                if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                                    // Handle the success of the consume operation.
                                     Log.i("DEBUGBILLING", "OK BUY")
+
 
                                     if(billingClient != null)
                                     {
                                         billingClient!!.endConnection()
                                     }
                                 }
-                            }
+                            })
                         }
+
+
                     }
                 }
             }
@@ -115,20 +151,20 @@ class MainActivity : AppCompatActivity(), PurchasesUpdatedListener {
 
     fun checkHistory()
     {
+        Log.i("DEBUGBILLING", "CHECK HISTORY")
         billingClient = BillingClient.newBuilder(this).setListener(this).enablePendingPurchases().build()
         billingClient!!.startConnection(object : BillingClientStateListener {
             override fun onBillingSetupFinished(billingResult: BillingResult) {
                 if (billingResult.responseCode ==  BillingClient.BillingResponseCode.OK) {
-                    billingClient!!.queryPurchaseHistoryAsync(BillingClient.SkuType.SUBS, { billingResultQuery, purchasesList ->
+                    billingClient!!.queryPurchaseHistoryAsync(BillingClient.SkuType.INAPP, { billingResultQuery, purchasesList ->
                         if (billingResultQuery.responseCode == BillingClient.BillingResponseCode.OK) {
 
                             val purchasesResult: Purchase.PurchasesResult = billingClient!!.queryPurchases(BillingClient.SkuType.INAPP)
 
                             for (purchase in purchasesResult!!.purchasesList!!) {
-                                val acknowledgePurchaseParams = AcknowledgePurchaseParams.newBuilder()
-                                        .setPurchaseToken(purchase.purchaseToken)
+                                //val acknowledgePurchaseParams = AcknowledgePurchaseParams.newBuilder().setPurchaseToken(purchase.purchaseToken)
 
-                                Log.i("BILLINGDEBUG", "HAVE BOUGHT "+purchase.sku)
+                                Log.i("DEBUGBILLING", "HAVE BOUGHT "+purchase.sku)
 
 
                             }
@@ -138,11 +174,11 @@ class MainActivity : AppCompatActivity(), PurchasesUpdatedListener {
                         }
                     })
                 } else {
-
+                    Log.i("DEBUGBILLING", "ERROR HISTORY")
                 }
             }
             override fun onBillingServiceDisconnected() {
-
+                Log.i("DEBUGBILLING", "BILLING DISCONNECTED")
             }
         })
     }
